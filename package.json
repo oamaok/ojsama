@@ -10,7 +10,8 @@
     "test": "./download_suite && node test.js",
     "build": "uglifyjs ojsama.js --mangle --source-map -o ojsama.min.js",
     "doc": "./update_doc",
-    "lint": "eslint ojsama.js"
+    "lint": "eslint ojsama.js",
+    "lint:fix": "eslint --fix ojsama.js"
   },
   "repository": {
     "type": "git",
@@ -39,8 +40,13 @@
     "UNLICENSE"
   ],
   "devDependencies": {
+    "babel-eslint": "^8.0.3",
     "docco": "0.7.0",
-    "uglify-js": "^3.2.0",
-    "eslint": "^4.11.0"
+    "eslint": "^4.13.1",
+    "eslint-config-airbnb": "^16.1.0",
+    "eslint-plugin-import": "^2.8.0",
+    "eslint-plugin-jsx-a11y": "^6.0.3",
+    "eslint-plugin-react": "^7.5.1",
+    "uglify-js": "^3.2.0"
   }
 }
