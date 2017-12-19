@@ -238,30 +238,26 @@ if (typeof exports !== 'undefined') {
   // timing point
   // ----------------------------------------------------------------
   // defines parameters such as timing and sampleset for an interval.
-  // for pp calculation we only need time and ms_per_beat
+  // for pp calculation we only need time and msPerBeat
   //
   // it can inherit from its preceeding point by having
-  // change = false and setting ms_per_beat to a negative value which
+  // change = false and setting msPerBeat to a negative value which
   // represents the bpm multiplier as ```-100 * bpm_multiplier```
 
-  function timing(values) {
-    this.time = values.time || 0.0;
-
-    this.ms_per_beat = values.ms_per_beat;
-    if (this.ms_per_beat === undefined) {
-      this.ms_per_beat = 600.0;
+  class Timing {
+    constructor({ time = 0.0, msPerBeat = 600.0, change = true }) {
+      this.time = time;
+      this.msPerBeat = msPerBeat;
+      this.change = change;
     }
 
-    this.change = values.change;
-    if (this.change === undefined) {
-      this.change = true;
+    toString() {
+      return JSON.stringify({
+        time: this.time.toFixed(2),
+        msPerBeat: this.msPerBeat.toFixed(2),
+      });
     }
   }
-
-  timing.prototype.toString = function () {
-    return `{ time: ${this.time.toFixed(2)}, `
-        + `ms_per_beat: ${this.ms_per_beat.toFixed(2)} }`;
-  };
 
   // hit objects
   // ----------------------------------------------------------------
@@ -270,9 +266,9 @@ if (typeof exports !== 'undefined') {
 
   // bitmask constants for object types. note that the type can
   // contain other flags so you should always check type with
-  // ```if (type & objtypes.circle) { ... }```
+  // ```if (type & objectTypes.circle) { ... }```
 
-  const objtypes = {
+  const objectTypes = {
     circle: 1 << 0,
     slider: 1 << 1,
     spinner: 1 << 3,
@@ -282,13 +278,17 @@ if (typeof exports !== 'undefined') {
   // stored in the objects are in playfield coordinates (512*384
   // rect)
 
-  function circle(values) {
-    this.pos = values.pos || [0, 0];
-  }
+  class Circle {
+    constructor({ pos = [0, 0] }) {
+      this.pos = pos;
+    }
 
-  circle.prototype.toString = function () {
-    return `pos: [${array_toFixed(this.pos, 2)}]`;
-  };
+    toString() {
+      return JSON.stringify({
+        pos: this.pos.map(p => p.toFixed(2)),
+      });
+    }
+  }
 
   // to calculate max combo we need to compute slider ticks
   //
@@ -298,17 +298,24 @@ if (typeof exports !== 'undefined') {
   //
   // note that 1 repetition means no repeats (1 loop)
 
-  function slider(values) {
-    this.pos = values.pos || [0, 0];
-    this.distance = values.distance || 0.0;
-    this.repetitions = values.repetitions || 1;
-  }
+  class Slider {
+    constructor({ pos = [0, 0], distance = 0.0, repetitions = 1 }) {
+      this.pos = pos;
+      this.distance = distance;
+      this.repetitions = repetitions;
+    }
 
-  slider.prototype.toString = function () {
-    return `pos: ${array_toFixed(this.pos, 2)}, ` +
-        `distance: ${this.distance.toFixed(2)}, ` +
-        `repetitions: ${this.repetitions}`;
-  };
+
+    toString() {
+      const { pos, distance, repetitions } = this;
+
+      return JSON.stringify({
+        pos: pos.map(p => p.toFixed(2)),
+        distance: distance.toFixed(2),
+        repetitions,
+      });
+    }
+  }
 
   // generic hitobject
   //
@@ -316,17 +323,28 @@ if (typeof exports !== 'undefined') {
   // object-specific properties are stored in data, which can be
   // an instance of circle, slider, or null
 
-  function hitobject(values) {
-    this.time = values.time || 0.0;
-    this.type = values.type || 0;
-    this.data = values.data || null;
+  class HitObject {
+    constructor({ time = 0.0, type = 0, data = null }) {
+      this.time = time;
+      this.type = type;
+      this.data = data;
+    }
+
+    typeString() {
+      // TODO
+    }
+
+    toString() {
+      // TODO
+    }
   }
 
+  /*
   hitobject.prototype.typestr = function () {
     let res = '';
-    if (this.type & objtypes.circle) res += 'circle | ';
-    if (this.type & objtypes.slider) res += 'slider | ';
-    if (this.type & objtypes.spinner) res += 'spinner | ';
+    if (this.type & objectTypes.circle) res += 'circle | ';
+    if (this.type & objectTypes.slider) res += 'slider | ';
+    if (this.type & objectTypes.spinner) res += 'spinner | ';
     return res.substring(0, Math.max(0, res.length - 3));
   };
 
@@ -336,6 +354,7 @@ if (typeof exports !== 'undefined') {
         }${this.data ? `, ${this.data.toString()}` : ''
         } }`;
   };
+  */
 
   // beatmap
   // ----------------------------------------------------------------
@@ -349,117 +368,120 @@ if (typeof exports !== 'undefined') {
   // partial beatmap structure with just enough data for pp
   // calculation
 
-  function beatmap() {
-    this.reset();
+  class Beatmap {
+    constructor() {
+      this.reset();
+    }
+
+    reset() {
+      this.formatVersion = 1;
+
+      this.mode = modes.std;
+
+      this.title = '';
+      this.titleUnicode = '';
+      this.artist = '';
+      this.artistUnicode = '';
+      this.creator = '';
+      this.version = '';
+
+      this.cs = 5.0;
+      this.ar = 5.0;
+      this.od = 5.0;
+      this.hp = 5.0;
+
+      this.sv = 1.0;
+      this.tick_rate = 1.0;
+
+      this.circleCount = 0;
+      this.sliderCount = 0;
+      this.spinnerCount = 0;
+
+      this.objects = [];
+
+      this.timingPoints = [];
+
+      return this;
+    }
+
+
+    // max combo calculation
+    //
+    // this is given by circleCount + spinnerCount + sliderCount * 2
+    // (heads and tails) + nsliderticks
+    //
+    // we approximate slider ticks by calculating the
+    // playfield pixels per beat for the current section
+    // and dividing the total distance travelled by
+    // pixels per beat. this gives us the number of beats,
+    // which multiplied by the tick rate gives use the
+    // tick count.
+    maxCombo() {
+      let res = this.circleCount + this.spinnerCount;
+      let tindex = -1;
+      let tnext = Number.NEGATIVE_INFINITY;
+      let pixelsPerBeat = 0.0;
+
+      this.objects
+        .filter(object => object.type & objectTypes.slider)
+        .forEach((object) => {
+        // keep track of the current timing point without
+        // looping through all of them for every object
+
+          while (object.time >= tnext) {
+            ++tindex;
+
+            if (this.timingPoints.length > tindex + 1) {
+              tnext = this.timingPoints[tindex + 1].time;
+            } else {
+              tnext = Number.POSITIVE_INFINITY;
+            }
+
+            const t = this.timingPoints[tindex];
+
+            let svMultiplier = 1.0;
+
+            if (!t.change && t.msPerBeat < 0) {
+              svMultiplier = -100.0 / t.msPerBeat;
+            }
+
+            // beatmaps older than format v8 don't apply
+            // the bpm multiplier to slider ticks
+
+            if (this.format_version < 8) {
+              pixelsPerBeat = this.sv * 100.0;
+            } else {
+              pixelsPerBeat = this.sv * 100.0 * svMultiplier;
+            }
+          }
+
+          const sl = object.data;
+
+          const beatCount =
+              (sl.distance * sl.repetitions) / pixelsPerBeat;
+
+          // subtract an epsilon to prevent accidental
+          // ceiling of whole values such as 2.00....1 -> 3 due
+          // to rounding errors
+
+          let ticks = Math.ceil((beatCount - 0.1) / sl.repetitions * this.tick_rate) - 1;
+
+          ticks *= sl.repetitions;
+          ticks += sl.repetitions + 1;
+
+          res += Math.max(0, ticks);
+        });
+
+
+      return res;
+    }
+
+    toString() {
+      // TODO
+    }
   }
 
-  beatmap.prototype.reset = function () {
-    this.format_version = 1;
-
-    this.mode = modes.std;
-
-    this.title = this.title_unicode = '';
-    this.artist = this.artist_unicode = '';
-    this.creator = '';
-    this.version = '';
-
-    this.cs = this.ar = this.od = this.hp = 5.0;
-    this.sv = this.tick_rate = 1.0;
-
-    this.ncircles = this.nsliders = this.nspinners = 0;
-
-    if (!this.objects) {
-      this.objects = [];
-    } else {
-      this.objects.length = 0;
-    }
-
-    if (!this.timing_points) {
-      this.timing_points = [];
-    } else {
-      this.timing_points.length = 0;
-    }
-
-    return this;
-  };
-
-  // max combo calculation
-  //
-  // this is given by ncircles + nspinners + nsliders * 2
-  // (heads and tails) + nsliderticks
-  //
-  // we approximate slider ticks by calculating the
-  // playfield pixels per beat for the current section
-  // and dividing the total distance travelled by
-  // pixels per beat. this gives us the number of beats,
-  // which multiplied by the tick rate gives use the
-  // tick count.
-
-  beatmap.prototype.max_combo = function () {
-    let res = this.ncircles + this.nspinners;
-    let tindex = -1;
-    let tnext = Number.NEGATIVE_INFINITY;
-    let px_per_beat = 0.0;
-
-    for (let i = 0; i < this.objects.length; ++i) {
-      const obj = this.objects[i];
-
-      if (!(obj.type & objtypes.slider)) {
-        continue;
-      }
-
-      // keep track of the current timing point without
-      // looping through all of them for every object
-
-      while (obj.time >= tnext) {
-        ++tindex;
-
-        if (this.timing_points.length > tindex + 1) {
-          tnext = this.timing_points[tindex + 1].time;
-        } else {
-          tnext = Number.POSITIVE_INFINITY;
-        }
-
-        const t = this.timing_points[tindex];
-
-        let sv_multiplier = 1.0;
-
-        if (!t.change && t.ms_per_beat < 0) {
-          sv_multiplier = -100.0 / t.ms_per_beat;
-        }
-
-        // beatmaps older than format v8 don't apply
-        // the bpm multiplier to slider ticks
-
-        if (this.format_version < 8) {
-          px_per_beat = this.sv * 100.0;
-        } else {
-          px_per_beat = this.sv * 100.0 * sv_multiplier;
-        }
-      }
-
-      const sl = obj.data;
-
-      const num_beats =
-            (sl.distance * sl.repetitions) / px_per_beat;
-
-        // subtract an epsilon to prevent accidental
-        // ceiling of whole values such as 2.00....1 -> 3 due
-        // to rounding errors
-
-      let ticks = Math.ceil((num_beats - 0.1) / sl.repetitions
-            * this.tick_rate);
-
-      --ticks;
-      ticks *= sl.repetitions;
-      ticks += sl.repetitions + 1;
-
-      res += Math.max(0, ticks);
-    }
-
-    return res;
-  };
-
+  /*
   beatmap.prototype.toString = function () {
     let res = `${this.artist} - ${this.title} [`;
 
@@ -474,13 +496,14 @@ if (typeof exports !== 'undefined') {
         + `OD${parseFloat(this.od.toFixed(2))} `
         + `CS${parseFloat(this.cs.toFixed(2))} `
         + `HP${parseFloat(this.hp.toFixed(2))}\n${
-          this.ncircles} circles, ${
-          this.nsliders} sliders, ${
-          this.nspinners} spinners` + `\n${
+          this.circleCount} circles, ${
+          this.sliderCount} sliders, ${
+          this.spinnerCount} spinners` + `\n${
         this.max_combo()} max combo` + '\n';
 
     return res;
   };
+  */
 
   // beatmap parser
   // ----------------------------------------------------------------
@@ -496,7 +519,7 @@ if (typeof exports !== 'undefined') {
   function parser() {
     // once you're done feeding data to the parser, you will find
     // the parsed beatmap in this object
-    this.map = new beatmap();
+    this.map = new Beatmap();
 
     this.reset();
   }
@@ -575,7 +598,7 @@ if (typeof exports !== 'undefined') {
       case 'Metadata': this._metadata(); break;
       case 'General': this._general(); break;
       case 'Difficulty': this._difficulty(); break;
-      case 'TimingPoints': this._timing_points(); break;
+      case 'TimingPoints': this._timingPoints(); break;
       case 'HitObjects': this._objects(); break;
     }
 
@@ -680,23 +703,23 @@ if (typeof exports !== 'undefined') {
     }
   };
 
-  parser.prototype._timing_points = function () {
+  parser.prototype._timingPoints = function () {
     const s = this.curline.split(',');
 
     if (s.length > 8) {
       this._warn('timing point with trailing values');
     }
 
-    const t = new timing({
+    const t = new Timing({
       time: parseFloat(this._setpos(s[0])),
-      ms_per_beat: parseFloat(this._setpos(s[1])),
+      msPerBeat: parseFloat(this._setpos(s[1])),
     });
 
     if (s.length >= 7) {
       t.change = s[6].trim() !== '0';
     }
 
-    this.map.timing_points.push(t);
+    this.map.timingPoints.push(t);
   };
 
   parser.prototype._objects = function () {
@@ -706,24 +729,24 @@ if (typeof exports !== 'undefined') {
       this._warn('object with trailing values');
     }
 
-    const obj = new hitobject({
+    const obj = new HitObject({
       time: parseFloat(this._setpos(s[2])),
       type: parseInt(this._setpos(s[3])),
     });
 
-    if ((obj.type & objtypes.circle) != 0) {
-      ++this.map.ncircles;
-      obj.data = new circle({
+    if ((obj.type & objectTypes.circle) != 0) {
+      ++this.map.circleCount;
+      obj.data = new Circle({
         pos: [
           parseFloat(this._setpos(s[0])),
           parseFloat(this._setpos(s[1])),
         ],
       });
-    } else if ((obj.type & osu.objtypes.spinner) != 0) {
-      ++this.map.nspinners;
-    } else if ((obj.type & osu.objtypes.slider) != 0) {
-      ++this.map.nsliders;
-      obj.data = new slider({
+    } else if ((obj.type & osu.objectTypes.spinner) != 0) {
+      ++this.map.spinnerCount;
+    } else if ((obj.type & osu.objectTypes.slider) != 0) {
+      ++this.map.sliderCount;
+      obj.data = new Slider({
         pos: [
           parseFloat(this._setpos(s[0])),
           parseFloat(this._setpos(s[1])),
@@ -1074,7 +1097,7 @@ if (typeof exports !== 'undefined') {
         ++this.nsingles;
       }
 
-      if (!(obj.type & (objtypes.circle | objtypes.slider))) {
+      if (!(obj.type & (objectTypes.circle | objectTypes.slider))) {
         continue;
       }
 
@@ -1142,7 +1165,7 @@ if (typeof exports !== 'undefined') {
       time_elapsed / 1000.0,
     );
 
-    if ((obj.type & (objtypes.slider | objtypes.circle)) != 0) {
+    if ((obj.type & (objectTypes.slider | objectTypes.circle)) != 0) {
       const distance = vec_len(vec_sub(diffobj.normpos, prev_diffobj.normpos));
 
       if (type == DIFF_SPEED) {
@@ -1275,14 +1298,14 @@ if (typeof exports !== 'undefined') {
 
       const obj = diffobjs[i].obj;
 
-      if (obj.type & objtypes.spinner) {
+      if (obj.type & objectTypes.spinner) {
         diffobjs[i].normpos = normalized_center.slice();
         continue;
       }
 
       var pos;
 
-      if (obj.type & (objtypes.slider | objtypes.circle)) {
+      if (obj.type & (objectTypes.slider | objectTypes.circle)) {
         pos = obj.data.pos;
       } else {
         log.warn(
@@ -1454,7 +1477,7 @@ if (typeof exports !== 'undefined') {
   // map, stars, acc_percent
   //
   // params:
-  // aim_stars, speed_stars, max_combo, nsliders, ncircles,
+  // aim_stars, speed_stars, max_combo, sliderCount, circleCount,
   // nobjects, base_ar = 5, base_od = 5, mode = modes.std,
   // mods = modbits.nomod, combo = max_combo - nmiss,
   // n300 = nobjects - n100 - n50 - nmiss, n100 = 0, n50 = 0,
@@ -1463,7 +1486,7 @@ if (typeof exports !== 'undefined') {
   // if stars is defined, map and mods are obtained from stars as
   // well as aim_stars and speed_stars
   //
-  // if map is defined, max_combo, nsliders, ncircles, nobjects,
+  // if map is defined, max_combo, sliderCount, circleCount, nobjects,
   // base_ar, base_od will be obtained from this beatmap
   //
   // if map is defined and stars is not defined, a new difficulty
@@ -1478,8 +1501,8 @@ if (typeof exports !== 'undefined') {
     let stars = params.stars;
     let map = params.map;
     let max_combo,
-      nsliders,
-      ncircles,
+      sliderCount,
+      circleCount,
       nobjects,
       base_ar,
       base_od;
@@ -1493,8 +1516,8 @@ if (typeof exports !== 'undefined') {
 
     if (map) {
       max_combo = map.max_combo();
-      nsliders = map.nsliders;
-      ncircles = map.ncircles;
+      sliderCount = map.sliderCount;
+      circleCount = map.circleCount;
       nobjects = map.objects.length;
       base_ar = map.ar;
       base_od = map.od;
@@ -1508,14 +1531,14 @@ if (typeof exports !== 'undefined') {
         throw new TypeError('max_combo must be > 0');
       }
 
-      nsliders = params.nsliders;
-      ncircles = params.ncircles;
+      sliderCount = params.sliderCount;
+      circleCount = params.circleCount;
       nobjects = params.nobjects;
-      if (!nsliders || !ncircles || !nobjects) {
-        throw new TypeError('nsliders, ncircles, nobjects are required');
+      if (!sliderCount || !circleCount || !nobjects) {
+        throw new TypeError('sliderCount, circleCount, nobjects are required');
       }
-      if (nobjects < nsliders + ncircles) {
-        throw new TypeError('nobjects must be >= nsliders + ncircles');
+      if (nobjects < sliderCount + circleCount) {
+        throw new TypeError('nobjects must be >= sliderCount + circleCount');
       }
 
       base_ar = params.base_ar;
@@ -1640,10 +1663,10 @@ if (typeof exports !== 'undefined') {
 
     switch (score_version) {
       case 1:
-        var nspinners = nobjects - nsliders - ncircles;
+        var spinnerCount = nobjects - sliderCount - circleCount;
 
         real_acc = new std_accuracy({
-          n300: Math.max(0, n300 - nsliders - nspinners),
+          n300: Math.max(0, n300 - sliderCount - spinnerCount),
           n100,
           n50,
           nmiss,
@@ -1653,7 +1676,7 @@ if (typeof exports !== 'undefined') {
         break;
 
       case 2:
-        ncircles = nobjects;
+        circleCount = nobjects;
         break;
 
       default:
@@ -1666,7 +1689,7 @@ if (typeof exports !== 'undefined') {
     let acc = Math.pow(1.52163, mapstats.od) *
         Math.pow(real_acc, 24.0) * 2.83;
 
-    acc *= Math.min(1.15, Math.pow(ncircles / 1000.0, 0.3));
+    acc *= Math.min(1.15, Math.pow(circleCount / 1000.0, 0.3));
 
     if (mods & modbits.hd) acc *= 1.02;
     if (mods & modbits.fl) acc *= 1.02;
@@ -1728,7 +1751,7 @@ if (typeof exports !== 'undefined') {
   // ----------------------------------------------------------------
 
   osu.timing = timing;
-  osu.objtypes = objtypes;
+  osu.objectTypes = objectTypes;
   osu.circle = circle;
   osu.slider = slider;
   osu.hitobject = hitobject;
