@@ -62,9 +62,9 @@
 // var osu = require("./ojsama");
 //
 // var mods = osu.MOD_CONSTANTS.none;
-// var acc_percent;
+// var accuracyPercent;
 // var combo;
-// var nmiss;
+// var missCount;
 //
 // // get mods, acc, combo, misses from command line arguments
 // // format: +HDDT 95% 300x 1m
@@ -77,7 +77,7 @@
 //     }
 //
 //     else if (argv[i].endsWith("%")) {
-//         acc_percent = parseFloat(argv[i]);
+//         accuracyPercent = parseFloat(argv[i]);
 //     }
 //
 //     else if (argv[i].endsWith("x")) {
@@ -85,7 +85,7 @@
 //     }
 //
 //     else if (argv[i].endsWith("m")) {
-//         nmiss = parseInt(argv[i]);
+//         missCount = parseInt(argv[i]);
 //     }
 // }
 //
@@ -108,15 +108,15 @@
 //     var pp = osu.ppv2({
 //         stars: stars,
 //         combo: combo,
-//         nmiss: nmiss,
-//         acc_percent: acc_percent,
+//         missCount: missCount,
+//         accuracyPercent: accuracyPercent,
 //     });
 //
-//     var max_combo = map.max_combo();
-//     combo = combo || max_combo;
+//     var maxCombo = map.maxCombo();
+//     combo = combo || maxCombo;
 //
 //     console.log(pp.computed_accuracy.toString());
-//     console.log(combo + "/" + max_combo + "x");
+//     console.log(combo + "/" + maxCombo + "x");
 //
 //     console.log(pp.toString());
 // });
@@ -493,7 +493,7 @@ if (typeof exports !== 'undefined') {
           this.circleCount} circles, ${
           this.sliderCount} sliders, ${
           this.spinnerCount} spinners` + `\n${
-        this.max_combo()} max combo` + '\n';
+        this.maxCombo()} max combo` + '\n';
 
     return res;
   };
@@ -858,7 +858,7 @@ if (typeof exports !== 'undefined') {
 
       this.map = null;
       this.mods = MOD_CONSTANTS.NOMOD;
-      this.singletap_threshold = 125.0;
+      this.singletapThreshold = 125.0;
     }
 
     reset() {
@@ -889,7 +889,7 @@ if (typeof exports !== 'undefined') {
     //   unspecified, it will default to the last map used
     //   in previous calls.
     // * mods: mods bitmask, defaults to MOD_CONSTANTS.NOMOD
-    // * singletap_threshold: interval threshold in milliseconds
+    // * singletapThreshold: interval threshold in milliseconds
     //   for singletaps. defaults to 240 bpm 1/2 singletaps
     //   ```(60000 / 240) / 2``` .
     //   see nsingles_threshold
@@ -901,8 +901,8 @@ if (typeof exports !== 'undefined') {
       }
 
       const mods = this.mods = params.mods || this.mods;
-      var singletap_threshold = this.singletap_threshold
-        = params.singletap_threshold || singletap_threshold;
+      var singletapThreshold = this.singletapThreshold
+        = params.singletapThreshold || singletapThreshold;
 
       // apply mods to the beatmap's stats
 
@@ -949,7 +949,7 @@ if (typeof exports !== 'undefined') {
 
         const interval = (obj.time - prev.time) / speedMultiplier;
 
-        if (interval >= singletap_threshold) {
+        if (interval >= singletapThreshold) {
           ++this.nsingles_threshold;
         }
       }
@@ -1003,10 +1003,10 @@ if (typeof exports !== 'undefined') {
       const prev_obj = prev_diffobj.obj;
 
       let value = 0.0;
-      const time_elapsed = (obj.time - prev_obj.time) / speedMultiplier;
+      const timeElapsed = (obj.time - prev_obj.time) / speedMultiplier;
       const decay = Math.pow(
         DECAY_BASE[type],
-        time_elapsed / 1000.0,
+        timeElapsed / 1000.0,
       );
 
       if ((obj.type & (objectTypes.slider | objectTypes.circle)) != 0) {
@@ -1020,7 +1020,7 @@ if (typeof exports !== 'undefined') {
         value *= WEIGHT_SCALING[type];
       }
 
-      value /= Math.max(time_elapsed, 50.0);
+      value /= Math.max(timeElapsed, 50.0);
 
       diffobj.strains[type]
         = prev_diffobj.strains[type] * decay + value;
@@ -1039,43 +1039,43 @@ if (typeof exports !== 'undefined') {
     // beginning of the new chunk
 
     _calc_individual(
-      type, diffobjs,
+      type, difficultyObjects,
       speedMultiplier,
     ) {
       const strains = [];
-      const strain_step = STRAIN_STEP * speedMultiplier;
-      let interval_end = strain_step;
-      let max_strain = 0.0;
+      const strainStep = STRAIN_STEP * speedMultiplier;
+      let intervalEnd = strainStep;
+      let maxStrain = 0.0;
       let i;
 
-      for (i = 0; i < diffobjs.length; ++i) {
+      for (i = 0; i < difficultyObjects.length; ++i) {
         if (i > 0) {
           this._calc_strain(
-            type, diffobjs[i], diffobjs[i - 1],
+            type, difficultyObjects[i], difficultyObjects[i - 1],
             speedMultiplier,
           );
         }
 
-        while (diffobjs[i].obj.time > interval_end) {
-          strains.push(max_strain);
+        while (difficultyObjects[i].obj.time > intervalEnd) {
+          strains.push(maxStrain);
 
           if (i > 0) {
             const decay = Math.pow(
               DECAY_BASE[type],
-              (interval_end - diffobjs[i - 1].obj.time) / 1000.0,
+              (intervalEnd - difficultyObjects[i - 1].obj.time) / 1000.0,
             );
 
-            max_strain = diffobjs[i - 1].strains[type]
+            maxStrain = difficultyObjects[i - 1].strains[type]
                     * decay;
           } else {
-            max_strain = 0.0;
+            maxStrain = 0.0;
           }
 
-          interval_end += strain_step;
+          intervalEnd += strainStep;
         }
 
-        max_strain
-            = Math.max(max_strain, diffobjs[i].strains[type]);
+        maxStrain
+            = Math.max(maxStrain, difficultyObjects[i].strains[type]);
       }
 
       let weight = 1.0;
@@ -1101,46 +1101,46 @@ if (typeof exports !== 'undefined') {
       const radius = (PLAYFIELD_SIZE[0] / 16.0)
         * (1.0 - 0.7 * (circlesize - 5.0) / 5.0);
 
-      let scaling_factor = 52.0 / radius;
+      let scalingFactor = 52.0 / radius;
 
       // high circlesize (small circles) bonus
 
       if (radius < CIRCLESIZE_BUFF_THRESHOLD) {
-        scaling_factor *= 1.0
+        scalingFactor *= 1.0
             + Math.min(CIRCLESIZE_BUFF_THRESHOLD - radius, 5.0) / 50.0;
       }
 
-      return [scaling_factor, scaling_factor];
+      return [scalingFactor, scalingFactor];
     }
 
     // _(internal)_
-    // initialize diffobjs (or reset if already initialized) and
+    // initialize difficultyObjects (or reset if already initialized) and
     // populate it with the normalized position of the map's
     // objects
 
     _init_objects(
-      diffobjs, map,
+      difficultyObjects, map,
       circlesize,
     ) {
-      if (diffobjs.length != map.objects.length) {
-        diffobjs.length = map.objects.length;
+      if (difficultyObjects.length != map.objects.length) {
+        difficultyObjects.length = map.objects.length;
       }
 
-      const scaling_vec = this._normalizer_vector(circlesize);
+      const scalingVector = this._normalizer_vector(circlesize);
       const normalized_center
-        = vec_mul(PLAYFIELD_CENTER, scaling_vec);
+        = vec_mul(PLAYFIELD_CENTER, scalingVector);
 
-      for (let i = 0; i < diffobjs.length; ++i) {
-        if (!diffobjs[i]) {
-          diffobjs[i] = new StdDifficultyHitObject(map.objects[i]);
+      for (let i = 0; i < difficultyObjects.length; ++i) {
+        if (!difficultyObjects[i]) {
+          difficultyObjects[i] = new StdDifficultyHitObject(map.objects[i]);
         } else {
-          diffobjs[i] = new StdDifficultyHitObject(diffobjs[i].obj);
+          difficultyObjects[i] = new StdDifficultyHitObject(difficultyObjects[i].obj);
         }
 
-        const obj = diffobjs[i].obj;
+        const obj = difficultyObjects[i].obj;
 
         if (obj.type & objectTypes.spinner) {
-          diffobjs[i].normpos = normalized_center.slice();
+          difficultyObjects[i].normpos = normalized_center.slice();
           continue;
         }
 
@@ -1157,7 +1157,7 @@ if (typeof exports !== 'undefined') {
           pos = [0.0, 0.0];
         }
 
-        diffobjs[i].normpos = vec_mul(pos, scaling_vec);
+        difficultyObjects[i].normpos = vec_mul(pos, scalingVector);
       }
     }
   }
@@ -1217,43 +1217,43 @@ if (typeof exports !== 'undefined') {
 
   // osu!standard accuracy calculator
   //
-  // if percent and nobjects are specified, n300, n100 and n50 will
+  // if percent and objectCount are specified, n300, n100 and n50 will
   // be automatically calculated to be the closest to the given
   // acc percent
 
-  class std_accuracy {
-    constructor(values) {
-      this.nmiss = values.nmiss || 0;
+  class StdAccuracy {
+    constructor({
+      missCount = 0,
+      n300 = -1,
+      n100 = 0,
+      n50 = 0,
+      objectCount,
+      percent,
+    }) {
+      this.missCount = missCount;
+      this.n300 = n300;
+      this.n100 = n100;
+      this.n50 = n50;
 
-      if (values.n300 === undefined) {
-        this.n300 = -1;
-      } else {
-        this.n300 = values.n300;
-      }
-
-      this.n100 = values.n100 || 0;
-      this.n50 = values.n50 || 0;
-
-      if (values.percent) {
-        const nobjects = values.nobjects;
-        if (nobjects === undefined) {
-          throw new TypeError('nobjects is required when specifying percent');
+      if (percent) {
+        if (objectCount === undefined) {
+          throw new TypeError('objectCount is required when specifying percent');
         }
 
-        this.nmiss = Math.min(nobjects, this.nmiss);
-        const max300 = nobjects - this.nmiss;
+        this.missCount = Math.min(objectCount, this.missCount);
+        const max300 = objectCount - this.missCount;
 
-        const maxacc = new std_accuracy({
-          n300: max300, n100: 0, n50: 0, nmiss: this.nmiss,
+        const maxAccuracy = new StdAccuracy({
+          n300: max300, n100: 0, n50: 0, missCount: this.missCount,
         }).value() * 100.0;
 
-        let acc_percent = values.percent;
-        acc_percent = Math.max(0.0, Math.min(maxacc, acc_percent));
+        let accuracyPercent = percent;
+        accuracyPercent = Math.max(0.0, Math.min(maxAccuracy, accuracyPercent));
 
         // just some black magic maths from wolfram alpha
 
         this.n100 = Math.round(-3.0 *
-            ((acc_percent * 0.01 - 1.0) * nobjects + this.nmiss) *
+            ((accuracyPercent * 0.01 - 1.0) * objectCount + this.missCount) *
             0.5);
 
         if (this.n100 > max300) {
@@ -1262,37 +1262,36 @@ if (typeof exports !== 'undefined') {
           this.n100 = 0;
 
           this.n50 = Math.round(-6.0 *
-                ((acc_percent * 0.01 - 1.0) * nobjects +
-                    this.nmiss) * 0.5);
+                ((accuracyPercent * 0.01 - 1.0) * objectCount +
+                    this.missCount) * 0.5);
 
           this.n50 = Math.min(max300, this.n50);
         }
 
-        this.n300 = nobjects - this.n100 - this.n50 - this.nmiss;
+        this.n300 = objectCount - this.n100 - this.n50 - this.missCount;
       }
     }
 
 
     // computes the accuracy value (0.0-1.0)
     //
-    // if n300 was specified in the constructor, nobjects is not
+    // if n300 was specified in the constructor, objectCount is not
     // required and will be automatically computed
 
-    value(nobjects) {
+    value(objectCount) {
       let n300 = this.n300;
 
       if (n300 < 0) {
-        if (!nobjects) {
-          throw new TypeError('either n300 or nobjects must be specified');
+        if (!objectCount) {
+          throw new TypeError('either n300 or objectCount must be specified');
         }
 
-        n300 = nobjects - this.n100 - this.n50 - this.nmiss;
+        n300 = objectCount - this.n100 - this.n50 - this.missCount;
       } else {
-        nobjects = n300 + this.n100 + this.n50
-            + this.nmiss;
+        objectCount = n300 + this.n100 + this.n50 + this.missCount;
       }
 
-      const res = (n300 * 300.0 + this.n100 * 100.0 + this.n50 * 50.0) / (nobjects * 300.0);
+      const res = (n300 * 300.0 + this.n100 * 100.0 + this.n50 * 50.0) / (objectCount * 300.0);
 
       return Math.max(0, Math.min(res, 1.0));
     }
@@ -1300,13 +1299,13 @@ if (typeof exports !== 'undefined') {
     toString() {
       return `${(this.value() * 100.0).toFixed(2)}% ${
         this.n100}x100 ${this.n50}x50 ${
-        this.nmiss}xmiss`;
+        this.missCount}xmiss`;
     }
   }
 
   // osu! standard ppv2 calculator
 
-  class std_ppv2 {
+  class StdPPv2 {
     constructor() {
       this.aim = 0.0;
       this.speed = 0.0;
@@ -1318,25 +1317,25 @@ if (typeof exports !== 'undefined') {
     }
 
     // metaparams:
-    // map, stars, acc_percent
+    // map, stars, accuracyPercent
     //
     // params:
-    // aim_stars, speed_stars, max_combo, sliderCount, circleCount,
-    // nobjects, baseAR = 5, baseOD = 5, mode = modes.std,
-    // mods = MOD_CONSTANTS.NOMOD, combo = max_combo - nmiss,
-    // n300 = nobjects - n100 - n50 - nmiss, n100 = 0, n50 = 0,
-    // nmiss = 0, score_version = 1
+    // aimStars, speedStars, maxCombo, sliderCount, circleCount,
+    // objectCount, baseAR = 5, baseOD = 5, mode = modes.std,
+    // mods = MOD_CONSTANTS.NOMOD, combo = maxCombo - missCount,
+    // n300 = objectCount - n100 - n50 - missCount, n100 = 0, n50 = 0,
+    // missCount = 0, scoreVersion = 1
     //
     // if stars is defined, map and mods are obtained from stars as
-    // well as aim_stars and speed_stars
+    // well as aimStars and speedStars
     //
-    // if map is defined, max_combo, sliderCount, circleCount, nobjects,
+    // if map is defined, maxCombo, sliderCount, circleCount, objectCount,
     // baseAR, baseOD will be obtained from this beatmap
     //
     // if map is defined and stars is not defined, a new difficulty
     // calculator will be created on the fly to compute stars for map
     //
-    // if acc_percent is defined, n300, n100, n50 will be automatically
+    // if accuracyPercent is defined, n300, n100, n50 will be automatically
     // calculated to be as close as possible to this value
 
     calc(params) {
@@ -1344,25 +1343,25 @@ if (typeof exports !== 'undefined') {
 
       let stars = params.stars;
       let map = params.map;
-      let max_combo,
+      let maxCombo,
         sliderCount,
         circleCount,
-        nobjects,
+        objectCount,
         baseAR,
         baseOD;
       let mods;
-      let aim_stars,
-        speed_stars;
+      let aimStars,
+        speedStars;
 
       if (stars) {
         map = stars.map;
       }
 
       if (map) {
-        max_combo = map.max_combo();
+        maxCombo = map.maxCombo();
         sliderCount = map.sliderCount;
         circleCount = map.circleCount;
-        nobjects = map.objects.length;
+        objectCount = map.objects.length;
         baseAR = map.ar;
         baseOD = map.od;
 
@@ -1370,19 +1369,19 @@ if (typeof exports !== 'undefined') {
           stars = new StdDifficulty().calc(params);
         }
       } else {
-        max_combo = params.max_combo;
-        if (!max_combo || max_combo < 0) {
-          throw new TypeError('max_combo must be > 0');
+        maxCombo = params.maxCombo;
+        if (!maxCombo || maxCombo < 0) {
+          throw new TypeError('maxCombo must be > 0');
         }
 
         sliderCount = params.sliderCount;
         circleCount = params.circleCount;
-        nobjects = params.nobjects;
-        if (!sliderCount || !circleCount || !nobjects) {
-          throw new TypeError('sliderCount, circleCount, nobjects are required');
+        objectCount = params.objectCount;
+        if (!sliderCount || !circleCount || !objectCount) {
+          throw new TypeError('sliderCount, circleCount, objectCount are required');
         }
-        if (nobjects < sliderCount + circleCount) {
-          throw new TypeError('nobjects must be >= sliderCount + circleCount');
+        if (objectCount < sliderCount + circleCount) {
+          throw new TypeError('objectCount must be >= sliderCount + circleCount');
         }
 
         baseAR = params.baseAR;
@@ -1393,56 +1392,55 @@ if (typeof exports !== 'undefined') {
 
       if (stars) {
         mods = stars.mods;
-        aim_stars = stars.aim;
-        speed_stars = stars.speed;
+        aimStars = stars.aim;
+        speedStars = stars.speed;
       } else {
         mods = params.mods || MOD_CONSTANTS.NOMOD;
-        aim_stars = params.aim_stars;
-        speed_stars = params.speed_stars;
+        aimStars = params.aimStars;
+        speedStars = params.speedStars;
       }
 
-      if (aim_stars === undefined || speed_stars === undefined) {
+      if (aimStars === undefined || speedStars === undefined) {
         throw new TypeError('aim and speed stars required');
       }
 
-      const nmiss = params.nmiss || 0;
+      const missCount = params.missCount || 0;
       let n50 = params.n50 || 0;
       let n100 = params.n100 || 0;
 
       let n300 = params.n300;
-      if (n300 === undefined) { n300 = nobjects - n100 - n50 - nmiss; }
+      if (n300 === undefined) { n300 = objectCount - n100 - n50 - missCount; }
 
       let combo = params.combo;
-      if (combo === undefined) combo = max_combo - nmiss;
+      if (combo === undefined) combo = maxCombo - missCount;
 
-      const score_version = params.score_version || 1;
+      const scoreVersion = params.scoreVersion || 1;
 
       // common values used in all pp calculations
 
-      const nobjects_over_2k = nobjects / 2000.0;
+      const objectCount_over_2k = objectCount / 2000.0;
 
-      let length_bonus = 0.95 + 0.4 *
-        Math.min(1.0, nobjects_over_2k);
+      let lengthBonus = 0.95 + 0.4 *
+        Math.min(1.0, objectCount_over_2k);
 
-      if (nobjects > 2000) {
-        length_bonus += Math.log10(nobjects_over_2k) * 0.5;
+      if (objectCount > 2000) {
+        lengthBonus += Math.log10(objectCount_over_2k) * 0.5;
       }
 
-      const miss_penality = Math.pow(0.97, nmiss);
-      const combo_break = Math.pow(combo, 0.8) /
-        Math.pow(max_combo, 0.8);
+      const missPenalty = 0.97 ** missCount;
+      const comboBreak = combo ** 0.8 / maxCombo ** 0.8;
 
       const mapstats
         = new StdBeatmapStats({ ar: baseAR, od: baseOD })
           .with_mods(mods);
 
-      this.computed_accuracy = new std_accuracy({
-        percent: params.acc_percent,
-        nobjects,
+      this.computed_accuracy = new StdAccuracy({
+        percent: params.accuracyPercent,
+        objectCount,
         n300,
         n100,
         n50,
-        nmiss,
+        missCount,
       });
 
       n300 = this.computed_accuracy.n300;
@@ -1453,48 +1451,48 @@ if (typeof exports !== 'undefined') {
 
       // high/low ar bonus
 
-      let ar_bonus = 1.0;
+      let arBonus = 1.0;
 
       if (mapstats.ar > 10.33) {
-        ar_bonus += 0.45 * (mapstats.ar - 10.33);
+        arBonus += 0.45 * (mapstats.ar - 10.33);
       } else if (mapstats.ar < 8.0) {
-        let low_ar_bonus = 0.01 * (8.0 - mapstats.ar);
+        let lowArBonus = 0.01 * (8.0 - mapstats.ar);
 
         if (mods & MOD_CONSTANTS.HD) {
-          low_ar_bonus *= 2.0;
+          lowArBonus *= 2.0;
         }
 
-        ar_bonus += low_ar_bonus;
+        arBonus += lowArBonus;
       }
 
       // aim pp
 
-      let aim = this._base(aim_stars);
-      aim *= length_bonus;
-      aim *= miss_penality;
-      aim *= combo_break;
-      aim *= ar_bonus;
+      let aim = this._base(aimStars);
+      aim *= lengthBonus;
+      aim *= missPenalty;
+      aim *= comboBreak;
+      aim *= arBonus;
 
       if (mods & MOD_CONSTANTS.HD) aim *= 1.18;
-      if (mods & MOD_CONSTANTS.FL) aim *= 1.45 * length_bonus;
+      if (mods & MOD_CONSTANTS.FL) aim *= 1.45 * lengthBonus;
 
-      const acc_bonus = 0.5 + accuracy / 2.0;
-      const od_bonus =
+      const accuracyBonus = 0.5 + accuracy / 2.0;
+      const odBonus =
         0.98 + (mapstats.od * mapstats.od) / 2500.0;
 
-      aim *= acc_bonus;
-      aim *= od_bonus;
+      aim *= accuracyBonus;
+      aim *= odBonus;
 
       this.aim = aim;
 
       // speed pp
 
-      let speed = this._base(speed_stars);
-      speed *= length_bonus;
-      speed *= miss_penality;
-      speed *= combo_break;
-      speed *= acc_bonus;
-      speed *= od_bonus;
+      let speed = this._base(speedStars);
+      speed *= lengthBonus;
+      speed *= missPenalty;
+      speed *= comboBreak;
+      speed *= accuracyBonus;
+      speed *= odBonus;
 
       this.speed = speed;
 
@@ -1503,37 +1501,36 @@ if (typeof exports !== 'undefined') {
       // scorev1 ignores sliders and spinners since they are free
       // 300s
 
-      let real_acc = accuracy;
+      let realAccuracy = accuracy;
 
-      switch (score_version) {
+      switch (scoreVersion) {
         case 1:
-          var spinnerCount = nobjects - sliderCount - circleCount;
+          var spinnerCount = objectCount - sliderCount - circleCount;
 
-          real_acc = new std_accuracy({
+          realAccuracy = new StdAccuracy({
             n300: Math.max(0, n300 - sliderCount - spinnerCount),
             n100,
             n50,
-            nmiss,
+            missCount,
           }).value();
 
-          real_acc = Math.max(0.0, real_acc);
+          realAccuracy = Math.max(0.0, realAccuracy);
           break;
 
         case 2:
-          circleCount = nobjects;
+          circleCount = objectCount;
           break;
 
         default:
           throw new {
             name: 'NotImplementedError',
-            message: `unsupported scorev${score_version}`,
+            message: `unsupported scorev${scoreVersion}`,
           }();
       }
 
-      let acc = Math.pow(1.52163, mapstats.od) *
-        Math.pow(real_acc, 24.0) * 2.83;
+      let acc = (1.52163 ** mapstats.od) * (realAccuracy ** 24.0) * 2.83;
 
-      acc *= Math.min(1.15, Math.pow(circleCount / 1000.0, 0.3));
+      acc *= Math.min(1.15, (circleCount / 1000.0) ** 0.3);
 
       if (mods & MOD_CONSTANTS.HD) acc *= 1.02;
       if (mods & MOD_CONSTANTS.FL) acc *= 1.02;
@@ -1542,16 +1539,12 @@ if (typeof exports !== 'undefined') {
 
       // total pp
 
-      let final_multiplier = 1.12;
+      let finalMultiplier = 1.12;
 
-      if (mods & MOD_CONSTANTS.NF) final_multiplier *= 0.90;
-      if (mods & MOD_CONSTANTS.SO) final_multiplier *= 0.95;
+      if (mods & MOD_CONSTANTS.NF) finalMultiplier *= 0.90;
+      if (mods & MOD_CONSTANTS.SO) finalMultiplier *= 0.95;
 
-      this.total = Math.pow(
-        Math.pow(aim, 1.1) + Math.pow(speed, 1.1) +
-        Math.pow(acc, 1.1),
-        1.0 / 1.1,
-      ) * final_multiplier;
+      this.total = ((aim ** 1.1 + speed ** 1.1 + acc ** 1.1) ** (1.0 / 1.1)) * finalMultiplier;
 
       return this;
     }
@@ -1564,7 +1557,7 @@ if (typeof exports !== 'undefined') {
 
     // _(internal)_ base pp value for stars
     _base(stars) {
-      return Math.pow(5.0 * Math.max(1.0, stars / 0.0675) - 4.0, 3.0) / 100000.0;
+      return (5.0 * Math.max(1.0, stars / 0.0675) - 4.0) ** 3.0 / 100000.0;
     }
   }
   // generic pp calc function that figures out what calculator to use
@@ -1582,7 +1575,7 @@ if (typeof exports !== 'undefined') {
 
     switch (mode) {
       case modes.std:
-        return new std_ppv2().calc(params);
+        return new StdPPv2().calc(params);
     }
 
     throw {
@@ -1606,7 +1599,7 @@ if (typeof exports !== 'undefined') {
   osu.StdDifficultyHitObject = StdDifficultyHitObject;
   osu.StdDifficulty = StdDifficulty;
   osu.diff = diff;
-  osu.std_accuracy = std_accuracy;
-  osu.std_ppv2 = std_ppv2;
+  osu.StdAccuracy = StdAccuracy;
+  osu.StdPPv2 = StdPPv2;
   osu.ppv2 = ppv2;
 }());
