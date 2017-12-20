@@ -61,7 +61,7 @@
 // var readline = require("readline");
 // var osu = require("./ojsama");
 //
-// var mods = osu.modbits.none;
+// var mods = osu.MOD_CONSTANTS.none;
 // var acc_percent;
 // var combo;
 // var nmiss;
@@ -73,7 +73,7 @@
 // for (var i = 2; i < argv.length; ++i)
 // {
 //     if (argv[i].startsWith("+")) {
-//         mods = osu.modbits.from_string(argv[i].slice(1) || "");
+//         mods = osu.MOD_CONSTANTS.from_string(argv[i].slice(1) || "");
 //     }
 //
 //     else if (argv[i].endsWith("%")) {
@@ -99,7 +99,7 @@
 //     console.log(map.toString());
 //
 //     if (mods) {
-//         console.log("+" + osu.modbits.string(mods));
+//         console.log("+" + osu.MOD_CONSTANTS.string(mods));
 //     }
 //
 //     var stars = new osu.diff().calc({map: map, mods: mods});
@@ -391,7 +391,7 @@ if (typeof exports !== 'undefined') {
       this.hp = 5.0;
 
       this.sv = 1.0;
-      this.tick_rate = 1.0;
+      this.tickRate = 1.0;
 
       this.circleCount = 0;
       this.sliderCount = 0;
@@ -448,7 +448,7 @@ if (typeof exports !== 'undefined') {
             // beatmaps older than format v8 don't apply
             // the bpm multiplier to slider ticks
 
-            if (this.format_version < 8) {
+            if (this.formatVersion < 8) {
               pixelsPerBeat = this.sv * 100.0;
             } else {
               pixelsPerBeat = this.sv * 100.0 * svMultiplier;
@@ -464,7 +464,7 @@ if (typeof exports !== 'undefined') {
           // ceiling of whole values such as 2.00....1 -> 3 due
           // to rounding errors
 
-          let ticks = Math.ceil((beatCount - 0.1) / sl.repetitions * this.tick_rate) - 1;
+          let ticks = Math.ceil((beatCount - 0.1) / sl.repetitions * this.tickRate) - 1;
 
           ticks *= sl.repetitions;
           ticks += sl.repetitions + 1;
@@ -485,9 +485,9 @@ if (typeof exports !== 'undefined') {
   beatmap.prototype.toString = function () {
     let res = `${this.artist} - ${this.title} [`;
 
-    if (this.title_unicode || this.artist_unicode) {
-      res += `(${this.artist_unicode} - ${
-        this.title_unicode})`;
+    if (this.titleUnicode || this.artistUnicode) {
+      res += `(${this.artistUnicode} - ${
+        this.titleUnicode})`;
     }
 
     res += `${this.version}] mapped by ${this.creator}\n`
@@ -512,252 +512,146 @@ if (typeof exports !== 'undefined') {
   // files with random spaces or a BOM before this have been found
   // in the wild so in practice we still have to trim the first line
 
-  const OSU_MAGIC = 'osu file format v';
+  const OSU_MAGIC_REGEX = /^osu file format v(\d+)$/;
 
   // partial .osu file parser built around pp calculation
 
-  function parser() {
-    // once you're done feeding data to the parser, you will find
-    // the parsed beatmap in this object
-    this.map = new Beatmap();
 
-    this.reset();
-  }
+  Beatmap.parse = (file) => {
+    const commentFilter = line => !!line.match(/^(\/\/|[ _])/);
 
-  parser.prototype.reset = function () {
-    this.map.reset();
+    const lines = file.split('\n')
+      // Filter out comments
+      .filter(commentFilter)
+      .map(line => line.trim())
+      // Filter out empty lines
+      .filter(line => line.length);
 
-    // parser state: number of lines fed, last touched line,
-    // last touched substring and the current section name
-    //
-    // these can be used to debug syntax errors
+    const map = new Beatmap();
 
-    this.nline = 0;
-    this.curline = '';
-    this.lastpos = '';
-    this.section = '';
+    const parseKeyValuePair = (line) => {
+      const match = line.match(/^([^:]+)\s*:\s*(.+)$/);
 
-    return this;
-  };
+      if (!match) return {};
 
-  // you can feed a single line or a whole block of text which
-  // will be split into lines. partial lines are not allowed
-  //
-  // both feed functions return the parser instance for easy
-  // chaining
+      const [, key, value] = match;
+      return { key, value };
+    };
 
-  parser.prototype.feed_line = function (line) {
-    this.curline = this.lastpos = line;
-    ++this.nline;
+    const metaToPropMap = {
+      Title: 'title',
+      TitleUnicode: 'titleUnicode',
+      Artist: 'artist',
+      ArtistUnicode: 'artistUnicode',
+      Creator: 'creator',
+      Version: 'version',
+      Mode: 'mode',
+    };
 
-    // first line must be the magic format version string
-    if (this.nline == 1) {
-      this.map.reset();
+    const parseMetadata = (line) => {
+      const { key, value } = parseKeyValuePair(line);
 
-      if (!line) {
-        throw new SyntaxError('empty file');
+      const prop = metaToPropMap[key];
+
+      if (prop) {
+        map[prop] = value;
+      }
+    };
+
+    const diffToPropMap = {
+      CircleSize: 'cs',
+      OverallDifficulty: 'od',
+      ApproachRate: 'ar',
+      HPDrainRate: 'hp',
+      SliderMultiplier: 'sv',
+      SliderTickRate: 'tickRate',
+    };
+
+    const parseDifficulty = (line) => {
+      const { key, value } = diffToPropMap(line);
+
+      const prop = metaToPropMap[key];
+
+      if (prop) {
+        map[prop] = parseFloat(value);
+      }
+    };
+
+    const parseTimingPoints = (line) => {
+      const [time, msPerBeat, ...rest] = line.split(',').map(v => v.trim());
+
+      const timing = new Timing({
+        time: parseFloat(time),
+        msPerBeat: parseFloat(msPerBeat),
+      });
+
+      if (rest.length >= 5) {
+        timing.change = rest[4] !== '0';
       }
 
-      const magicpos = line.indexOf(OSU_MAGIC);
-      if (magicpos < 0) {
-        throw new SyntaxError('not a valid .osu file');
+      map.timingPoints.push(timing);
+    };
+
+    const parseHitObjects = (line) => {
+      const [posX, posY, time, type, ,,, repetitions, distance] = line.split(',');
+
+      const obj = new HitObject({
+        time: parseFloat(time),
+        type: parseInt(type, 10),
+      });
+
+      const pos = [parseFloat(posX), parseFloat(posY)];
+
+      if (obj.type & objectTypes.circle) {
+        ++this.map.circleCount;
+        obj.data = new Circle({ pos });
+      } else if (obj.type & osu.objectTypes.spinner) {
+        ++this.map.spinnerCount;
+      } else if (obj.type & osu.objectTypes.slider) {
+        ++this.map.sliderCount;
+        obj.data = new Slider({
+          pos,
+          repetitions: parseInt(repetitions, 10),
+          distance: parseFloat(distance),
+        });
       }
 
-      this.map.format_version = parseInt(line.substring(magicpos + OSU_MAGIC.length));
+      this.map.objects.push(obj);
+    };
 
-      return this;
-    }
+    const sectionParsers = {
+      Metadata: parseMetadata,
+      General: parseMetadata,
+      Difficulty: parseDifficulty,
+      TimingPoints: parseTimingPoints,
+      HitObjects: parseHitObjects,
+    };
 
-    // comments
-    if (line.startsWith(' ') || line.startsWith('_')) {
-      return this;
-    }
+    let currentSection;
 
-    // now that we've handled space comments we can trim space
-    line = this.curline = line.trim();
-    if (line.length <= 0) {
-      return this;
-    }
+    lines.forEach((line, index) => {
+      if (index === 0) {
+        const match = line.match(OSU_MAGIC_REGEX);
+        if (match) {
+          throw new SyntaxError('Invalid .osu file!');
+        }
 
-    // c++ style comments
-    if (line.startsWith('//')) {
-      return this;
-    }
+        [, map.formatVersion] = match;
 
-    // [SectionName]
-    if (line.startsWith('[')) {
-      this.section = line.substring(1, line.length - 1);
-      return this;
-    }
+        return;
+      }
 
-    if (!line) {
-      return this;
-    }
+      const sectionMatch = line.match(/^\[([^\]]+)\]$/);
 
-    switch (this.section) {
-      case 'Metadata': this._metadata(); break;
-      case 'General': this._general(); break;
-      case 'Difficulty': this._difficulty(); break;
-      case 'TimingPoints': this._timingPoints(); break;
-      case 'HitObjects': this._objects(); break;
-    }
+      if (sectionMatch) {
+        [, currentSection] = sectionMatch;
+        return;
+      }
 
-    return this;
-  };
-
-  parser.prototype.feed = function (str) {
-    var lines = lines = str.split('\n');
-    for (let i = 0; i < lines.length; ++i) {
-      this.feed_line(lines[i]);
-    }
-    return this;
-  };
-
-  // returns the parser state formatted into a string. useful
-  // for debugging syntax errors
-
-  parser.prototype.toString = function () {
-    return `at line ${this.nline}\n${
-      this.curline}\n` +
-        `-> ${this.lastpos} <-`;
-  };
-
-  // _(internal)_ parser utilities
-
-  parser.prototype._setpos = function (str) {
-    this.lastpos = str.trim();
-    return this.lastpos;
-  };
-
-  parser.prototype._warn = function () {
-    log.warn.apply(null, Array.prototype.slice.call(arguments));
-    log.warn(this.toString());
-  };
-
-  parser.prototype._property = function () {
-    const s = this.curline.split(':', 2);
-    s[0] = this._setpos(s[0]);
-    s[1] = this._setpos(s[1]);
-    return s;
-  };
-
-  // _(internal)_ line parsers for each section
-
-  parser.prototype._metadata = function () {
-    const p = this._property();
-
-    switch (p[0]) {
-      case 'Title':
-        this.map.title = p[1];
-        break;
-      case 'TitleUnicode':
-        this.map.title_unicode = p[1];
-        break;
-      case 'Artist':
-        this.map.artist = p[1];
-        break;
-      case 'ArtistUnicode':
-        this.map.artist_unicode = p[1];
-        break;
-      case 'Creator':
-        this.map.creator = p[1];
-        break;
-      case 'Version':
-        this.map.version = p[1];
-        break;
-    }
-  };
-
-  parser.prototype._general = function () {
-    const p = this._property();
-
-    if (p[0] !== 'Mode') {
-      return;
-    }
-
-    this.map.mode = parseInt(this._setpos(p[1]));
-  };
-
-  parser.prototype._difficulty = function () {
-    const p = this._property();
-
-    switch (p[0]) {
-      case 'CircleSize':
-        this.map.cs = parseFloat(this._setpos(p[1]));
-        break;
-      case 'OverallDifficulty':
-        this.map.od = parseFloat(this._setpos(p[1]));
-        break;
-      case 'ApproachRate':
-        this.map.ar = parseFloat(this._setpos(p[1]));
-        break;
-      case 'HPDrainRate':
-        this.map.hp = parseFloat(this._setpos(p[1]));
-        break;
-      case 'SliderMultiplier':
-        this.map.sv = parseFloat(this._setpos(p[1]));
-        break;
-      case 'SliderTickRate':
-        this.map.tick_rate = parseFloat(this._setpos(p[1]));
-        break;
-    }
-  };
-
-  parser.prototype._timingPoints = function () {
-    const s = this.curline.split(',');
-
-    if (s.length > 8) {
-      this._warn('timing point with trailing values');
-    }
-
-    const t = new Timing({
-      time: parseFloat(this._setpos(s[0])),
-      msPerBeat: parseFloat(this._setpos(s[1])),
+      (sectionParsers[currentSection] || (() => {}))(line);
     });
-
-    if (s.length >= 7) {
-      t.change = s[6].trim() !== '0';
-    }
-
-    this.map.timingPoints.push(t);
   };
 
-  parser.prototype._objects = function () {
-    const s = this.curline.split(',');
-
-    if (s.length > 11) {
-      this._warn('object with trailing values');
-    }
-
-    const obj = new HitObject({
-      time: parseFloat(this._setpos(s[2])),
-      type: parseInt(this._setpos(s[3])),
-    });
-
-    if ((obj.type & objectTypes.circle) != 0) {
-      ++this.map.circleCount;
-      obj.data = new Circle({
-        pos: [
-          parseFloat(this._setpos(s[0])),
-          parseFloat(this._setpos(s[1])),
-        ],
-      });
-    } else if ((obj.type & osu.objectTypes.spinner) != 0) {
-      ++this.map.spinnerCount;
-    } else if ((obj.type & osu.objectTypes.slider) != 0) {
-      ++this.map.sliderCount;
-      obj.data = new Slider({
-        pos: [
-          parseFloat(this._setpos(s[0])),
-          parseFloat(this._setpos(s[1])),
-        ],
-        repetitions: parseInt(this._setpos(s[6])),
-        distance: parseFloat(this._setpos(s[7])),
-      });
-    }
-
-    this.map.objects.push(obj);
-  };
 
   // difficulty calculation
   // ----------------------------------------------------------------
@@ -766,7 +660,7 @@ if (typeof exports !== 'undefined') {
   // NOTE: td is touch device, but it's also the value for the
   // legacy no video mod
 
-  const modbits = {
+  const MOD_CONSTANTS = {
     nomod: 0,
     nf: 1 << 0,
     ez: 1 << 1,
@@ -782,21 +676,21 @@ if (typeof exports !== 'undefined') {
 
   // construct the mods bitmask from a string such as "HDHR"
 
-  modbits.from_string = function (str) {
+  MOD_CONSTANTS.from_string = function (str) {
     let mask = 0;
     str = str.toLowerCase();
 
-    for (const property in modbits) {
+    for (const property in MOD_CONSTANTS) {
       if (property.length != 2) {
         continue;
       }
 
-      if (!modbits.hasOwnProperty(property)) {
+      if (!MOD_CONSTANTS.hasOwnProperty(property)) {
         continue;
       }
 
       if (str.indexOf(property) >= 0) {
-        mask |= modbits[property];
+        mask |= MOD_CONSTANTS[property];
       }
     }
 
@@ -805,19 +699,19 @@ if (typeof exports !== 'undefined') {
 
   // convert mods bitmask into a string, such as "HDHR"
 
-  modbits.string = function (mods) {
+  MOD_CONSTANTS.string = function (mods) {
     let res = '';
 
-    for (const property in modbits) {
+    for (const property in MOD_CONSTANTS) {
       if (property.length != 2) {
         continue;
       }
 
-      if (!modbits.hasOwnProperty(property)) {
+      if (!MOD_CONSTANTS.hasOwnProperty(property)) {
         continue;
       }
 
-      if (mods & modbits[property]) {
+      if (mods & MOD_CONSTANTS[property]) {
         res += property.toUpperCase();
       }
     }
@@ -825,9 +719,9 @@ if (typeof exports !== 'undefined') {
     return res;
   };
 
-  modbits.speed_changing = modbits.dt | modbits.ht | modbits.nc;
-  modbits.map_changing
-    = modbits.hr | modbits.ez | modbits.speed_changing;
+  MOD_CONSTANTS.speedChanging = MOD_CONSTANTS.dt | MOD_CONSTANTS.ht | MOD_CONSTANTS.nc;
+  MOD_CONSTANTS.mapChanging
+    = MOD_CONSTANTS.hr | MOD_CONSTANTS.ez | MOD_CONSTANTS.speedChanging;
 
   // _(internal)_
   // osu!standard stats constants
@@ -907,17 +801,17 @@ if (typeof exports !== 'undefined') {
     const stats = this._mods_cache[mods]
         = new std_beatmap_stats(this);
 
-    if (!(mods & modbits.map_changing)) {
+    if (!(mods & MOD_CONSTANTS.mapChanging)) {
       return stats;
     }
 
-    if (mods & (modbits.dt | modbits.nc)) { stats.speed_mul = 1.5; }
+    if (mods & (MOD_CONSTANTS.dt | MOD_CONSTANTS.nc)) { stats.speed_mul = 1.5; }
 
-    if (mods & modbits.ht) { stats.speed_mul *= 0.75; }
+    if (mods & MOD_CONSTANTS.ht) { stats.speed_mul *= 0.75; }
 
     let od_ar_hp_multiplier = 1.0;
-    if (mods & modbits.hr) od_ar_hp_multiplier = 1.4;
-    if (mods & modbits.ez) od_ar_hp_multiplier *= 0.5;
+    if (mods & MOD_CONSTANTS.hr) od_ar_hp_multiplier = 1.4;
+    if (mods & MOD_CONSTANTS.ez) od_ar_hp_multiplier *= 0.5;
 
     if (stats.ar) {
       stats.ar = modify_ar(
@@ -934,8 +828,8 @@ if (typeof exports !== 'undefined') {
     }
 
     if (stats.cs) {
-      if (mods & modbits.hr) stats.cs *= 1.3;
-      if (mods & modbits.ez) stats.cs *= 0.5;
+      if (mods & MOD_CONSTANTS.hr) stats.cs *= 1.3;
+      if (mods & MOD_CONSTANTS.ez) stats.cs *= 0.5;
       stats.cs = Math.min(10.0, stats.cs);
     }
 
@@ -1011,7 +905,7 @@ if (typeof exports !== 'undefined') {
     // re-used in subsequent calls if no new value is specified
 
     this.map = null;
-    this.mods = modbits.nomod;
+    this.mods = MOD_CONSTANTS.nomod;
     this.singletap_threshold = 125.0;
   }
 
@@ -1042,7 +936,7 @@ if (typeof exports !== 'undefined') {
   // * map: the beatmap we want to calculate difficulty for. if
   //   unspecified, it will default to the last map used
   //   in previous calls.
-  // * mods: mods bitmask, defaults to modbits.nomod
+  // * mods: mods bitmask, defaults to MOD_CONSTANTS.nomod
   // * singletap_threshold: interval threshold in milliseconds
   //   for singletaps. defaults to 240 bpm 1/2 singletaps
   //   ```(60000 / 240) / 2``` .
@@ -1073,7 +967,7 @@ if (typeof exports !== 'undefined') {
 
     this.speed = Math.sqrt(this.speed) * STAR_SCALING_FACTOR;
     this.aim = Math.sqrt(this.aim) * STAR_SCALING_FACTOR;
-    if (mods & modbits.td) {
+    if (mods & MOD_CONSTANTS.td) {
       this.aim = Math.pow(this.aim, 0.8);
     }
 
@@ -1479,7 +1373,7 @@ if (typeof exports !== 'undefined') {
   // params:
   // aim_stars, speed_stars, max_combo, sliderCount, circleCount,
   // nobjects, base_ar = 5, base_od = 5, mode = modes.std,
-  // mods = modbits.nomod, combo = max_combo - nmiss,
+  // mods = MOD_CONSTANTS.nomod, combo = max_combo - nmiss,
   // n300 = nobjects - n100 - n50 - nmiss, n100 = 0, n50 = 0,
   // nmiss = 0, score_version = 1
   //
@@ -1552,7 +1446,7 @@ if (typeof exports !== 'undefined') {
       aim_stars = stars.aim;
       speed_stars = stars.speed;
     } else {
-      mods = params.mods || modbits.nomod;
+      mods = params.mods || MOD_CONSTANTS.nomod;
       aim_stars = params.aim_stars;
       speed_stars = params.speed_stars;
     }
@@ -1616,7 +1510,7 @@ if (typeof exports !== 'undefined') {
     } else if (mapstats.ar < 8.0) {
       let low_ar_bonus = 0.01 * (8.0 - mapstats.ar);
 
-      if (mods & modbits.hd) {
+      if (mods & MOD_CONSTANTS.hd) {
         low_ar_bonus *= 2.0;
       }
 
@@ -1631,8 +1525,8 @@ if (typeof exports !== 'undefined') {
     aim *= combo_break;
     aim *= ar_bonus;
 
-    if (mods & modbits.hd) aim *= 1.18;
-    if (mods & modbits.fl) aim *= 1.45 * length_bonus;
+    if (mods & MOD_CONSTANTS.hd) aim *= 1.18;
+    if (mods & MOD_CONSTANTS.fl) aim *= 1.45 * length_bonus;
 
     const acc_bonus = 0.5 + accuracy / 2.0;
     const od_bonus =
@@ -1691,8 +1585,8 @@ if (typeof exports !== 'undefined') {
 
     acc *= Math.min(1.15, Math.pow(circleCount / 1000.0, 0.3));
 
-    if (mods & modbits.hd) acc *= 1.02;
-    if (mods & modbits.fl) acc *= 1.02;
+    if (mods & MOD_CONSTANTS.hd) acc *= 1.02;
+    if (mods & MOD_CONSTANTS.fl) acc *= 1.02;
 
     this.acc = acc;
 
@@ -1700,8 +1594,8 @@ if (typeof exports !== 'undefined') {
 
     let final_multiplier = 1.12;
 
-    if (mods & modbits.nf) final_multiplier *= 0.90;
-    if (mods & modbits.so) final_multiplier *= 0.95;
+    if (mods & MOD_CONSTANTS.nf) final_multiplier *= 0.90;
+    if (mods & MOD_CONSTANTS.so) final_multiplier *= 0.95;
 
     this.total = Math.pow(
       Math.pow(aim, 1.1) + Math.pow(speed, 1.1) +
@@ -1758,7 +1652,7 @@ if (typeof exports !== 'undefined') {
   osu.modes = modes;
   osu.beatmap = beatmap;
   osu.parser = parser;
-  osu.modbits = modbits;
+  osu.MOD_CONSTANTS = MOD_CONSTANTS;
   osu.std_beatmap_stats = std_beatmap_stats;
   osu.std_diff_hitobject = std_diff_hitobject;
   osu.std_diff = std_diff;
