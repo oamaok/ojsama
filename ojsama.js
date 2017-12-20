@@ -920,7 +920,7 @@ if (typeof exports !== 'undefined') {
       this.speed = Math.sqrt(this.speed) * STAR_SCALING_FACTOR;
       this.aim = Math.sqrt(this.aim) * STAR_SCALING_FACTOR;
       if (mods & MOD_CONSTANTS.TD) {
-        this.aim = Math.pow(this.aim, 0.8);
+        this.aim = this.aim ** 0.8;
       }
 
       // total stars mixes speed and aim in such a way that
@@ -969,7 +969,7 @@ if (typeof exports !== 'undefined') {
     _spacing_weight(type, distance) {
       switch (type) {
         case DIFF_AIM:
-          return Math.pow(distance, 0.99);
+          return distance ** 0.99;
 
         case DIFF_SPEED:
           if (distance > SINGLE_SPACING) {
@@ -1004,10 +1004,7 @@ if (typeof exports !== 'undefined') {
 
       let value = 0.0;
       const timeElapsed = (obj.time - prev_obj.time) / speedMultiplier;
-      const decay = Math.pow(
-        DECAY_BASE[type],
-        timeElapsed / 1000.0,
-      );
+      const decay = DECAY_BASE[type] ** (timeElapsed / 1000.0);
 
       if ((obj.type & (objectTypes.slider | objectTypes.circle)) != 0) {
         const distance = vec_len(vec_sub(diffobj.normpos, prev_diffobj.normpos));
@@ -1060,13 +1057,9 @@ if (typeof exports !== 'undefined') {
           strains.push(maxStrain);
 
           if (i > 0) {
-            const decay = Math.pow(
-              DECAY_BASE[type],
-              (intervalEnd - difficultyObjects[i - 1].obj.time) / 1000.0,
-            );
+            const decay = DECAY_BASE[type] ** ((intervalEnd - difficultyObjects[i - 1].obj.time) / 1000.0);
 
-            maxStrain = difficultyObjects[i - 1].strains[type]
-                    * decay;
+            maxStrain = difficultyObjects[i - 1].strains[type] * decay;
           } else {
             maxStrain = 0.0;
           }
