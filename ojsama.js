@@ -650,6 +650,8 @@ if (typeof exports !== 'undefined') {
 
       (sectionParsers[currentSection] || (() => {}))(line);
     });
+
+    return map;
   };
 
 
@@ -661,19 +663,18 @@ if (typeof exports !== 'undefined') {
   // legacy no video mod
 
   const MOD_CONSTANTS = {
-    nomod: 0,
-    nf: 1 << 0,
-    ez: 1 << 1,
-    td: 1 << 2,
-    hd: 1 << 3,
-    hr: 1 << 4,
-    dt: 1 << 6,
-    ht: 1 << 8,
-    nc: 1 << 9,
-    fl: 1 << 10,
-    so: 1 << 12,
+    NOMOD: 0,
+    NF: 1 << 0,
+    EZ: 1 << 1,
+    TD: 1 << 2,
+    HD: 1 << 3,
+    HR: 1 << 4,
+    DT: 1 << 6,
+    HT: 1 << 8,
+    NC: 1 << 9,
+    FL: 1 << 10,
+    SO: 1 << 12,
   };
-
   // construct the mods bitmask from a string such as "HDHR"
 
   MOD_CONSTANTS.from_string = function (str) {
@@ -719,9 +720,9 @@ if (typeof exports !== 'undefined') {
     return res;
   };
 
-  MOD_CONSTANTS.speedChanging = MOD_CONSTANTS.dt | MOD_CONSTANTS.ht | MOD_CONSTANTS.nc;
+  MOD_CONSTANTS.speedChanging = MOD_CONSTANTS.DT | MOD_CONSTANTS.HT | MOD_CONSTANTS.NC;
   MOD_CONSTANTS.mapChanging
-    = MOD_CONSTANTS.hr | MOD_CONSTANTS.ez | MOD_CONSTANTS.speedChanging;
+    = MOD_CONSTANTS.HR | MOD_CONSTANTS.EZ | MOD_CONSTANTS.speedChanging;
 
   // _(internal)_
   // osu!standard stats constants
@@ -805,13 +806,13 @@ if (typeof exports !== 'undefined') {
       return stats;
     }
 
-    if (mods & (MOD_CONSTANTS.dt | MOD_CONSTANTS.nc)) { stats.speed_mul = 1.5; }
+    if (mods & (MOD_CONSTANTS.DT | MOD_CONSTANTS.NC)) { stats.speed_mul = 1.5; }
 
-    if (mods & MOD_CONSTANTS.ht) { stats.speed_mul *= 0.75; }
+    if (mods & MOD_CONSTANTS.HT) { stats.speed_mul *= 0.75; }
 
     let od_ar_hp_multiplier = 1.0;
-    if (mods & MOD_CONSTANTS.hr) od_ar_hp_multiplier = 1.4;
-    if (mods & MOD_CONSTANTS.ez) od_ar_hp_multiplier *= 0.5;
+    if (mods & MOD_CONSTANTS.HR) od_ar_hp_multiplier = 1.4;
+    if (mods & MOD_CONSTANTS.EZ) od_ar_hp_multiplier *= 0.5;
 
     if (stats.ar) {
       stats.ar = modify_ar(
@@ -828,8 +829,8 @@ if (typeof exports !== 'undefined') {
     }
 
     if (stats.cs) {
-      if (mods & MOD_CONSTANTS.hr) stats.cs *= 1.3;
-      if (mods & MOD_CONSTANTS.ez) stats.cs *= 0.5;
+      if (mods & MOD_CONSTANTS.HR) stats.cs *= 1.3;
+      if (mods & MOD_CONSTANTS.EZ) stats.cs *= 0.5;
       stats.cs = Math.min(10.0, stats.cs);
     }
 
@@ -905,7 +906,7 @@ if (typeof exports !== 'undefined') {
     // re-used in subsequent calls if no new value is specified
 
     this.map = null;
-    this.mods = MOD_CONSTANTS.nomod;
+    this.mods = MOD_CONSTANTS.NOMOD;
     this.singletap_threshold = 125.0;
   }
 
@@ -936,7 +937,7 @@ if (typeof exports !== 'undefined') {
   // * map: the beatmap we want to calculate difficulty for. if
   //   unspecified, it will default to the last map used
   //   in previous calls.
-  // * mods: mods bitmask, defaults to MOD_CONSTANTS.nomod
+  // * mods: mods bitmask, defaults to MOD_CONSTANTS.NOMOD
   // * singletap_threshold: interval threshold in milliseconds
   //   for singletaps. defaults to 240 bpm 1/2 singletaps
   //   ```(60000 / 240) / 2``` .
@@ -967,7 +968,7 @@ if (typeof exports !== 'undefined') {
 
     this.speed = Math.sqrt(this.speed) * STAR_SCALING_FACTOR;
     this.aim = Math.sqrt(this.aim) * STAR_SCALING_FACTOR;
-    if (mods & MOD_CONSTANTS.td) {
+    if (mods & MOD_CONSTANTS.TD) {
       this.aim = Math.pow(this.aim, 0.8);
     }
 
@@ -1132,7 +1133,7 @@ if (typeof exports !== 'undefined') {
     let weight = 1.0;
     let difficulty = 0.0;
 
-    strains.sort((a, b) => b - a);
+    strains.SOrt((a, b) => b - a);
 
     for (i = 0; i < strains.length; ++i) {
       difficulty += strains[i] * weight;
@@ -1373,7 +1374,7 @@ if (typeof exports !== 'undefined') {
   // params:
   // aim_stars, speed_stars, max_combo, sliderCount, circleCount,
   // nobjects, base_ar = 5, base_od = 5, mode = modes.std,
-  // mods = MOD_CONSTANTS.nomod, combo = max_combo - nmiss,
+  // mods = MOD_CONSTANTS.NOMOD, combo = max_combo - nmiss,
   // n300 = nobjects - n100 - n50 - nmiss, n100 = 0, n50 = 0,
   // nmiss = 0, score_version = 1
   //
@@ -1446,7 +1447,7 @@ if (typeof exports !== 'undefined') {
       aim_stars = stars.aim;
       speed_stars = stars.speed;
     } else {
-      mods = params.mods || MOD_CONSTANTS.nomod;
+      mods = params.mods || MOD_CONSTANTS.NOMOD;
       aim_stars = params.aim_stars;
       speed_stars = params.speed_stars;
     }
@@ -1510,7 +1511,7 @@ if (typeof exports !== 'undefined') {
     } else if (mapstats.ar < 8.0) {
       let low_ar_bonus = 0.01 * (8.0 - mapstats.ar);
 
-      if (mods & MOD_CONSTANTS.hd) {
+      if (mods & MOD_CONSTANTS.HD) {
         low_ar_bonus *= 2.0;
       }
 
@@ -1525,8 +1526,8 @@ if (typeof exports !== 'undefined') {
     aim *= combo_break;
     aim *= ar_bonus;
 
-    if (mods & MOD_CONSTANTS.hd) aim *= 1.18;
-    if (mods & MOD_CONSTANTS.fl) aim *= 1.45 * length_bonus;
+    if (mods & MOD_CONSTANTS.HD) aim *= 1.18;
+    if (mods & MOD_CONSTANTS.FL) aim *= 1.45 * length_bonus;
 
     const acc_bonus = 0.5 + accuracy / 2.0;
     const od_bonus =
@@ -1585,8 +1586,8 @@ if (typeof exports !== 'undefined') {
 
     acc *= Math.min(1.15, Math.pow(circleCount / 1000.0, 0.3));
 
-    if (mods & MOD_CONSTANTS.hd) acc *= 1.02;
-    if (mods & MOD_CONSTANTS.fl) acc *= 1.02;
+    if (mods & MOD_CONSTANTS.HD) acc *= 1.02;
+    if (mods & MOD_CONSTANTS.FL) acc *= 1.02;
 
     this.acc = acc;
 
@@ -1594,8 +1595,8 @@ if (typeof exports !== 'undefined') {
 
     let final_multiplier = 1.12;
 
-    if (mods & MOD_CONSTANTS.nf) final_multiplier *= 0.90;
-    if (mods & MOD_CONSTANTS.so) final_multiplier *= 0.95;
+    if (mods & MOD_CONSTANTS.NF) final_multiplier *= 0.90;
+    if (mods & MOD_CONSTANTS.SO) final_multiplier *= 0.95;
 
     this.total = Math.pow(
       Math.pow(aim, 1.1) + Math.pow(speed, 1.1) +
